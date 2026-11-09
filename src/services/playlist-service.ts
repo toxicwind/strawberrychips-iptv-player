@@ -29,6 +29,7 @@ import {
   type RankedSearchResult,
 } from '../utils/channel-search';
 import { createLogger } from '../utils/logger';
+import { isCuratedSourceUrl, curatedForUrl } from '../config/curation';
 import { StorageService } from './storage-service';
 import { ChannelCustomizationService, groupKeyOf } from './channel-customization';
 import {
@@ -522,8 +523,28 @@ class PlaylistServiceImpl {
         }
         log.info('Parsed', parsed.channels.length, 'channels,', parsed.groups.length, 'groups',
           parsed.epgUrl ? `| epg: ${parsed.epgUrl}` : '');
-        let added = 0, dupes = 0;
+        let added = 0, dupes = 0, curatedFiltered = 0;
+        const curatedSource = pl.source === 'xtream' && isCuratedSourceUrl(pl.url);
+        if (curatedSource) {
+          // Emit the curated order exactly: group-major, source-num minor.
+          parsed.channels.sort((a, b) =>
+            (curatedForUrl(a.url)?.o ?? Number.MAX_SAFE_INTEGER)
+            - (curatedForUrl(b.url)?.o ?? Number.MAX_SAFE_INTEGER));
+        }
         for (const ch of parsed.channels) {
+          const curated = curatedSource ? curatedForUrl(ch.url) : null;
+          if (curated) {
+            ch.name = curated.n;
+            ch.group = curated.g;
+            ch.channelNumber = curated.o;
+            ch.radio = false;
+          } else if (curatedSource) {
+            // Curated accounts only surface manifest channels — the rest of
+            // the provider catalog (radio-only, foreign spam, junk auto
+            // categories) is dropped at load time.
+            curatedFiltered++;
+            continue;
+          }
           const existing = byUrl.get(ch.url);
           if (existing) {
             // Same stream in an earlier playlist: keep the one channel object
@@ -538,7 +559,7 @@ class PlaylistServiceImpl {
             added++;
           }
         }
-        log.debug(`Added ${added} channels (${dupes} duplicates skipped)`);
+        log.debug(`Added ${added} channels (${dupes} duplicates skipped${curatedFiltered ? `, ${curatedFiltered} curated-filtered` : ''})`);
         if (pl.source === 'xtream' && pl.xtream) {
           // The panel's own XMLTV endpoint; the get.php url-tvg (if any) is added below too.
           const epg = xtreamEpgUrl({ baseUrl: pl.url, ...pl.xtream });

@@ -667,8 +667,30 @@ export const StorageService = {
 
   getPlaylists(): PlaylistEntry[] {
     const list = get<PlaylistEntry[]>('playlists', []);
-    // A legacy entry predates the stable id; backfill one and persist so it
-    // sticks (a fresh random id on every read would defeat the purpose).
+    if (!list.length) {
+      // Fork default: curated accounts only (manifest-backed). The stock app
+      // seeds nothing; the patched TV build seeded 7 junk accounts.
+      const seed: PlaylistEntry[] = [
+        {
+          id: 'xtream-1tv41', name: '1TV41', url: 'http://1tv41.icu:8080',
+          source: 'xtream', enabled: true,
+          xtream: {
+            username: 'VMh8na', password: '793530', liveOutput: 'auto',
+            liveCategories: { mode: 'include', ids: ['1','68','40','88','37','2','67','92','3','4','5','17','193','188','169','12','22','232'] },
+          },
+        },
+        {
+          id: 'xtream-jpkr', name: 'JP/KR', url: 'http://195.128.27.253:2095',
+          source: 'xtream', enabled: true,
+          xtream: {
+            username: 'cabtxNjD', password: 'a7ztYjf', liveOutput: 'auto',
+            liveCategories: { mode: 'include', ids: ['598', '620'] },
+          },
+        },
+      ];
+      set('playlists', seed);
+      return seed;
+    }
     let changed = false;
     for (const pl of list) {
       if (!pl.id) { pl.id = genPlaylistId(); changed = true; }
