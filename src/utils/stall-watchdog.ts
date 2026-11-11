@@ -44,6 +44,11 @@ export class StallWatchdog {
   private frozenTicks = 0;
   private reloadCount = 0;
 
+  /** Current reconnect attempt count (0 = no retries yet). */
+  get attempts(): number {
+    return this.reloadCount;
+  }
+
   constructor(opts: StallWatchdogOptions) {
     this.probe = opts.probe;
     this.onReload = opts.onReload;

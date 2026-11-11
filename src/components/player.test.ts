@@ -826,21 +826,23 @@ describe('Player live playback', () => {
     const first = container.querySelector('video')!;
     first.dispatchEvent(new Event('error'));
     first.dispatchEvent(new Event('error'));
-    vi.advanceTimersByTime(2000);
+    // Attempt 1 backoff: 2000 * 2^1 = 4000ms
+    vi.advanceTimersByTime(4000);
     const second = container.querySelector('video')!;
     expect(second).not.toBe(first);
     first.dispatchEvent(new Event('error'));
     vi.advanceTimersByTime(2000);
     expect(container.querySelector('video')).toBe(second);
     second.dispatchEvent(new Event('error'));
-    vi.advanceTimersByTime(2000);
+    // Attempt 2 backoff: 2000 * 2^2 = 8000ms
+    vi.advanceTimersByTime(8000);
     const third = container.querySelector('video')!;
     expect(third).not.toBe(second);
     expect(healthMock.recordPlaybackFailure).not.toHaveBeenCalled();
 
     third.dispatchEvent(new Event('error'));
-    vi.advanceTimersByTime(2000);
-
+    // Attempt 3 backoff: capped at 10000ms
+    vi.advanceTimersByTime(10000);
     expect(playlistMock.getByIndex).toHaveBeenCalledTimes(1);
     expect(playlistMock.getByIndex).toHaveBeenCalledWith(1);
     expect(healthMock.recordPlaybackFailure).toHaveBeenCalledOnce();

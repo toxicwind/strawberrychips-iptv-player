@@ -7,6 +7,7 @@ import type {
   ChannelHealthStatus,
   ChannelScope,
   NumberEvent,
+  PlaylistTab,
 } from '../types';
 import { SpatialNav, isFocusMove } from '../navigation/spatial-nav';
 import { KeyHandler } from '../navigation/key-handler';
@@ -244,7 +245,7 @@ export class ChannelList {
       }
       if (!target.classList.contains('channel-main')) return;
       this.showChannelScrollbar(target);
-      if (this.currentGroup === 'builtin:recently-watched') return;
+      if (this.currentGroup === 'builtin:recently-watched' || this.railMode()) return;
       const offset = this.scrollGuard.readUserOffset(target, 'vertical');
       if (offset === null) return;
       this.channelVirtualizer.setScrollOffset(offset);
@@ -274,6 +275,138 @@ export class ChannelList {
   // as no scope at all.
   private currentScope(): ChannelScope {
     return { group: this.currentGroup, playlist: this.currentPlaylist || undefined };
+  }
+
+  /** Netflix-style browse mode: the All view renders hero + horizontal rails
+   *  instead of the sidebar + list. Edit/favorite/recent modes keep the list. */
+  private railMode(): boolean {
+    return (StorageService.getBrowseLayout?.() ?? 'classic') === 'rails'
+      && !this.editor.isChannelEditing && !this.editor.isManagingFavorites
+      && this.currentGroup === 'builtin:all' && !this.currentPlaylist;
+  }
+
+  private cachedGroupedChannels: { groupName: string; channels: Channel[] }[] | null = null;
+  private cachedGroupedChannelsGroup = '';
+
+  private getGroupedChannels(): { groupName: string; channels: Channel[] }[] {
+    if (this.cachedGroupedChannels && this.cachedGroupedChannelsGroup === this.currentGroup) {
+      return this.cachedGroupedChannels;
+    }
+    const channels = PlaylistService.getByGroup(this.currentGroup, this.currentPlaylist || undefined);
+    const groups: Record<string, Channel[]> = {};
+    for (const ch of channels) {
+      const g = ch.group || 'Uncategorized';
+      if (!groups[g]) groups[g] = [];
+      if (groups[g].length < 20) {
+        groups[g].push(ch);
+      }
+    }
+    this.cachedGroupedChannelsGroup = this.currentGroup;
+    this.cachedGroupedChannels = Object.entries(groups)
+      .map(([groupName, channels]) => ({ groupName, channels }))
+      .slice(0, 12);
+    return this.cachedGroupedChannels;
+  }
+
+  private renderRail(group: { groupName: string; channels: Channel[] }, favs: string[]): Safe {
+    const railChannels = group.channels.slice(0, 20);
+    return html`
+      <div class="live-rail">
+        <div class="live-rail-header">
+          <span class="live-rail-title">${group.groupName}</span>
+          <span class="live-rail-count">${group.channels.length} channels</span>
+        </div>
+        <div class="live-rail-track">
+          ${railChannels.map((ch, idx) => this.renderRailChannel(ch, favs, idx))}
+        </div>
+      </div>
+    `;
+  }
+
+  private renderRailChannel(ch: Channel, favs: string[], idx: number): Safe {
+    const globalIdx = PlaylistService.indexOf(ch);
+    const isPlaying = globalIdx === this.playingIndex && this.playingCatchupStart === null;
+    const isFav = favs.includes(channelKey(ch));
+    const initial = ch.name ? ch.name.charAt(0).toUpperCase() : '?';
+    const epgId = EpgService.findChannelId(ch);
+    const nowPlaying = epgId ? EpgService.getNowPlaying(epgId) : null;
+
+    return html`
+      <div class="live-channel-card ${isPlaying ? 'playing' : ''}"
+           data-key="ch:${String(globalIdx)}"
+           data-focusable data-channel-index="${globalIdx}"
+           data-rail-position="${idx}">
+        <div class="live-card-poster">
+          ${ch.logo && !this.failedLogos.has(ch.logo)
+            ? html`<img class="live-card-poster-bg" src="${ch.logo}" alt="">`
+            : html`<div class="live-card-poster-placeholder">${initial}</div>`}
+          <span class="live-card-number">${globalIdx + 1}</span>
+          ${isPlaying ? html`<span class="live-card-playing"></span>` : ''}
+          ${this.renderRailHealth(ch)}
+        </div>
+        <div class="live-card-info">
+          <div class="live-card-name">${raw(channelLockBadge(ch))}${isFav ? raw(favoriteIcon(true)) : ''}${ch.name}</div>
+          ${nowPlaying ? html`<div class="live-card-now">${nowPlaying.title}</div>` : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  private renderRailHealth(ch: Channel): Safe | string {
+    const status = ChannelHealthService.getRecord(ch)?.status;
+    if (!status) return '';
+    return html`<span class="live-card-health ${status}" title="${status}"></span>`;
+  }
+
+  private renderRailHero(playing: Channel | null): Safe {
+    const epgId = playing ? EpgService.findChannelId(playing) : null;
+    const nowPlaying = epgId ? EpgService.getNowPlaying(epgId) : null;
+    const initial = playing?.name ? playing.name.charAt(0).toUpperCase() : '?';
+    return html`
+      <div class="live-hero">
+        <div class="live-hero-bg" ${
+          playing?.logo && !this.failedLogos.has(playing.logo)
+            ? html`style="background-image:url('${playing.logo}')"`
+            : ''}></div>
+        <div class="live-hero-scrim"></div>
+        <div class="live-hero-content">
+          <span class="live-hero-live-badge">${t('common.live')}</span>
+          <div class="live-hero-channel">
+            <div class="live-hero-logo">${
+              playing?.logo && !this.failedLogos.has(playing.logo)
+                ? html`<img src="${playing.logo}" alt="">`
+                : initial}</div>
+            <div>
+              <div class="live-hero-name">${playing?.name ?? t('channel.empty')}</div>
+              ${nowPlaying ? html`<div class="live-hero-now">${nowPlaying.title}</div>` : ''}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private renderRailView(favs: string[], tabs: PlaylistTab[]): Safe {
+    const playing = this.playingIndex >= 0 ? PlaylistService.getByIndex(this.playingIndex) : null;
+    const grouped = this.getGroupedChannels();
+    return html`
+      <div class="channel-view rail-view">
+        ${this.renderRailHero(playing)}
+        <div class="live-playlist-tabs" data-nav-container>
+          <div class="live-playlist-tab ${!this.currentPlaylist ? 'active' : ''}"
+               data-key="tab:" data-focusable data-playlist="">${t('common.all')}</div>
+          ${tabs.map(t => html`
+            <div class="live-playlist-tab ${t.id === this.currentPlaylist ? 'active' : ''}"
+                 data-key="tab:${t.id}" data-focusable data-playlist="${t.id}">${t.name}</div>
+          `)}
+        </div>
+        <div class="channel-main live-rails-container" data-nav-container>
+          ${grouped.length
+            ? grouped.map(g => this.renderRail(g, favs))
+            : html`<div class="empty-state">${t('channel.empty')}</div>`}
+        </div>
+      </div>
+    `;
   }
 
   render(ensureFocus = true): void {
@@ -340,6 +473,12 @@ export class ChannelList {
       this.groupVirtualizer.ensureVisible(focusedGroupPosition, groupViewportHeight);
     }
     const groupRange = this.groupVirtualizer.getRange(groups.length, groupViewportHeight);
+
+    if (this.railMode()) {
+      morph(this.container, this.renderRailView(favs, tabs));
+      this.editor.syncEpgPickerScroll();
+      return;
+    }
 
     morph(this.container, html`
       <div class="channel-view ${editing && !managingFavorites ? 'editing' : ''} ${
@@ -717,6 +856,9 @@ export class ChannelList {
   private handleRegionNavigation(action: Action): boolean {
     const focused = this.nav.focused;
     if (!focused) return false;
+    // Rail cards navigate geometrically (left/right within a track, up/down
+    // between tracks) — none of the sidebar/group/playlist region logic applies.
+    if (this.railMode() && focused.closest('.live-rails-container')) return false;
 
     if (focused.dataset.playlist !== undefined) {
       const tabs = Array.from(
@@ -791,9 +933,13 @@ export class ChannelList {
   }
 
   private focusFirstChannel(): boolean {
-    const first = this.container.querySelector<HTMLElement>(
-      '.channel-main [data-list-position="0"]',
-    );
+    const first = this.railMode()
+      ? this.container.querySelector<HTMLElement>(
+        '.live-rails-container .live-channel-card',
+      )
+      : this.container.querySelector<HTMLElement>(
+        '.channel-main [data-list-position="0"]',
+      );
     if (!first) return false;
     this.nav.focus(first);
     return true;
@@ -853,6 +999,14 @@ export class ChannelList {
   // A channel named by global index can sit outside the current filter and
   // outside the virtualized window: widen, center, then focus.
   private revealChannel(globalIdx: number): boolean {
+    if (this.railMode()) {
+      const card = this.container.querySelector<HTMLElement>(
+        `.live-rails-container [data-channel-index="${String(globalIdx)}"]`,
+      );
+      if (!card) return false;
+      this.nav.focus(card);
+      return true;
+    }
     let position = this.channelPosition(globalIdx);
     if (position < 0 && this.currentGroup !== 'builtin:all') {
       this.currentGroup = 'builtin:all';
@@ -935,6 +1089,7 @@ export class ChannelList {
 
   // A virtual list row's place in the model, rendered or not.
   private rowPosition(key: string): { list: RowList; position: number } | null {
+    if (this.railMode()) return null;
     if (key.indexOf('g:') === 0) {
       const position = this.getGroupEntries().findIndex(group => `g:${group.id}` === key);
       return position < 0 ? null : { list: 'group', position };

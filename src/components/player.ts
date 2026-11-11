@@ -54,6 +54,26 @@ const log = createLogger('Player');
 // True on the TV's webOS WebView; false in desktop preview / tests.
 const STREAMING_MIMES = new Set(['application/vnd.apple.mpegurl', 'application/dash+xml']);
 
+/**
+ * Vary a stream URL for a retry so the request cannot repeat the dead route.
+ * Xtream panels (and CDN edges in front of them) cap concurrent connections per
+ * account and cache aggressively: an identical re-request can be served from
+ * the same saturated edge or rejected on the same lingering connection slot.
+ * A monotonic nonce per attempt forces a fresh route. Streaming manifests
+ * ignore unknown query params, so this is safe for HLS/DASH/TS alike.
+ */
+function bustStreamUrl(url: string, attempt: number): string {
+  if (attempt <= 0) return url;
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.set('_r', `${Date.now()}-${attempt}`);
+    return parsed.toString();
+  } catch {
+    // Relative or non-URL stream paths: append safely.
+    return url + (url.indexOf('?') >= 0 ? '&' : '?') + `_r=${Date.now()}-${attempt}`;
+  }
+}
+
 export class Player {
   private container: HTMLElement;
   private onBack: () => void;
@@ -200,7 +220,11 @@ export class Player {
           'event=playback.recovery.reload', this.playbackLabel(),
           `cause=${recovery.cause}`,
           this.recoveryState(recovery));
-        this.reloadCurrentStream();
+        // Pass the reload count as the retry attempt: each successive reload
+        // gets a fresh nonce so the re-request cannot repeat the dead route
+        // (Xtream panels hold the dead connection's slot server-side and a
+        // byte-identical re-request can 403 against it — see bustStreamUrl).
+        this.reloadCurrentStream(recovery.reloadCount);
       },
       onEscalate: recovery => {
         log.error('Live stream recovery exhausted; advancing channel',
@@ -550,6 +574,15 @@ export class Player {
     return channel.url;
   }
 
+  // Backoff for live reconnect retries: attempt 0 → base, doubling up to the
+  // ceiling. Gives the panel time to release the dead connection's slot before
+  // the retry opens a new one (per-account concurrent-connection caps).
+  private liveRetryDelay(): number {
+    const attempt = this.stallWatchdog ? this.stallWatchdog.attempts : 0;
+    const delay = CONFIG.PLAYER.LIVE_RETRY_BASE_DELAY_MS * 2 ** attempt;
+    return Math.min(delay, CONFIG.PLAYER.LIVE_RETRY_MAX_DELAY_MS);
+  }
+
   private startPlaybackGeneration(): void {
     this.cancelLiveHistoryTimer();
     this.cancelErrorAdvance();
@@ -867,15 +900,19 @@ export class Player {
   // Stall watchdog recovery: swap in a fresh <video> (kills the wedged native
   // pipeline) and reload the current channel WITHOUT going through play() — that
   // would reset the watchdog's reload budget and prevent escalation.
-  private reloadCurrentStream(): void {
+  //
+  // The reload varies the request with a retry nonce: Xtream panels cap
+  // concurrent connections per account, and the dead connection's slot lingers
+  // server-side after the client aborts. Re-requesting the identical URL can
+  // hit the same saturated panel edge (or its cache) and fail identically —
+  // the nonce forces a fresh route, the way a CDN cache-bust does.
+  private reloadCurrentStream(retryAttempt = 0): void {
     if (!this.currentChannel) return;
     this.osd.updateMessage(t('player.reconnecting'));
     this.recreateVideoEl();
     this.videoEl?.classList.add('active');
-    this.loadStream(
-      this.resolveStreamUrl(this.currentChannel, this.catchupInfo),
-      this.currentChannel.extras,
-    );
+    const url = this.resolveStreamUrl(this.currentChannel, this.catchupInfo);
+    this.loadStream(bustStreamUrl(url, retryAttempt), this.currentChannel.extras);
   }
 
   // A finished catch-up VOD would otherwise freeze on its last frame; fall back
@@ -1134,7 +1171,7 @@ export class Player {
         if (this.stallWatchdog.recoverFromError() && isWebOS()) {
           this.stallWatchdog.resume();
         }
-      }, 2000);
+      }, this.liveRetryDelay());
       return;
     }
     this.stallWatchdog.stop();

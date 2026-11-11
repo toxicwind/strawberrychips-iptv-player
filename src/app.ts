@@ -11,6 +11,7 @@ import {
   clearCachedCatalog,
   clearCachedPlaylist,
   flushCacheWrites,
+  hasCachedPlaylist,
 } from './services/idb-cache';
 import { SetupClient } from './services/setup-client';
 import { SearchIndexPrewarmer } from './services/search-index-store';
@@ -891,7 +892,10 @@ class App {
   private async loadData(forceEpgRefresh = false): Promise<void> {
     const done = log.time('loadData');
     this.loadingData = true;
-    show(this.views.loading);
+    // A cached playlist (even a stale one) means channels render instantly and
+    // the network refresh runs in the background — no full-screen loading gate.
+    const cached = await hasCachedPlaylist();
+    if (!cached) show(this.views.loading);
     this.stopEpgRefresh();
     this.stopPlaylistRefresh();
     if (this.playlistRefreshPromise) await this.playlistRefreshPromise;
@@ -923,14 +927,18 @@ class App {
       if (loadingText) loadingText.textContent = t('app.loadingChannels');
       let lastProgressAt = 0;
       await PlaylistService.load(progress => {
-        if (!loadingText) return;
         const now = Date.now();
         if (now - lastProgressAt < 250) return;
         lastProgressAt = now;
-        loadingText.textContent = t('app.loadingChannelsProgress', {
-          processed: progress.channelsProcessed,
-          kept: progress.channelsKept,
-        });
+        // Progress is the bar, not raw numbers: the text stays clean and the
+        // fill moves with the source count. A two-source install reads 0 → 50 → 100.
+        const pct = progress.sourceCount > 0
+          ? Math.round((progress.sourceNumber / progress.sourceCount) * 100)
+          : 0;
+        const fill = $('#loading-progress-fill');
+        if (fill) fill.style.width = `${pct}%`;
+        const bar = $('#loading-progress');
+        if (bar) bar.style.display = 'block';
       });
       this.player.syncCurrentIndex();
       await ChannelHealthService.initialize();

@@ -1530,6 +1530,34 @@ export async function getCachedPlaylist(
   return null;
 }
 
+/**
+ * Cheap cache-presence probe: true when a playlist record exists whose source
+ * signature matches the configured sources, regardless of age. Callers use it
+ * to skip the full-screen loading view on boot — the record may be stale, but
+ * `getCachedPlaylist(null)` already boots from an expired cache and the
+ * background refresh replaces it without blocking the UI.
+ */
+export async function hasCachedPlaylist(): Promise<boolean> {
+  try {
+    const raw = await readRaw(PLAYLIST_STORE, PLAYLIST_CACHE_KEY);
+    if (!raw) return false;
+    const payload = raw.data as CachedPlaylistPayload | undefined;
+    return !!payload
+      && payload.sourceSignature === playlistSourceSignature()
+      && Array.isArray(payload.channels)
+      && payload.channels.length > 0;
+  } catch (err) {
+    log.warn(
+      'Playlist cache presence probe failed',
+      'event=persistence.cache.read.failed',
+      'operation=probe',
+      'category=playlist',
+      err,
+    );
+    return false;
+  }
+}
+
 export async function setCachedPlaylist(
   channels: Channel[],
   epgSources: EpgSource[] = [],
