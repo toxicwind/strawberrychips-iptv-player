@@ -1,10 +1,10 @@
 {
   "id": "com.lennylxx.iptv",
   "version": "1.17.0",
-  "vendor": "lennylxx",
+  "vendor": "toxicwind",
   "type": "web",
   "main": "index.html",
-  "title": "webOS IPTV Player",
+  "title": "StrawberryChips IPTV",
   "appDescription": "IPTV player with M3U, Xtream, XMLTV, and catch-up.",
   "icon": "icon.png",
   "largeIcon": "largeIcon.png",

@@ -10,7 +10,6 @@
     "sourceMap": false,
     "outDir": "dist/js",
     "rootDir": "src",
-    "baseUrl": ".",
     "declaration": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
