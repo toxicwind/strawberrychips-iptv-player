@@ -623,7 +623,22 @@ export class PlayerPipeline {
       }
       const hlsConfig: Record<string, unknown> = {
         maxBufferLength: CONFIG.PLAYER.BUFFER_LENGTH,
+        // Larger forward buffer + keep a back buffer so a slow segment doesn't
+        // starve the pipeline and collapse it into a reset-to-0 reload.
+        maxMaxBufferLength: Math.max(CONFIG.PLAYER.BUFFER_LENGTH * 2, 60),
+        backBufferLength: 90,
+        lowLatencyMode: false,
+        // Keep a live stream pinned near the live edge rather than drifting into
+        // a stale offset that the sliding window then tears down.
+        liveSyncDurationCount: 3,
+        liveDurationInfinity: true,
         enableWorker: false,
+        // Be patient with slow/tokenized backends, but fail fast enough to zap.
+        fragLoadingMaxRetry: 6,
+        fragLoadingRetryDelay: 500,
+        fragLoadingTimeout: 15000,
+        levelLoadingMaxRetry: 4,
+        manifestLoadingMaxRetry: 3,
       };
 
       // Stable-URI loaders so a rotating-URL live window doesn't trip hls.js.
