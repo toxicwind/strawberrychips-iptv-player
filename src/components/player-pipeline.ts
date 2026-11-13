@@ -1,5 +1,6 @@
 import type { AudioOption, ManifestAudio, ManifestClosedCaption, ManifestSubtitle, SubtitleOption } from '../types';
 import { CONFIG } from '../config';
+import { fetchHlsManifest } from '../utils/hls-token';
 import { getCachedStreamMime, setCachedStreamMime } from '../services/idb-cache';
 import { parseMpd, type MpdManifest } from '../parsers/mpd-manifest';
 import {
@@ -605,11 +606,11 @@ export class PlayerPipeline {
       this.videoLabel(videoEl), 'path=native', this.callbacks.mediaState(videoEl), e));
   }
 
-  private loadWithHls(
+  private async loadWithHls(
     url: string,
     extras: Record<string, string> | null,
     loadToken: number,
-  ): void {
+  ): Promise<void> {
     if (!this.videoEl) return;
     const Hls = win.__Hls as HlsType | undefined;
     try {
@@ -654,12 +655,19 @@ export class PlayerPipeline {
       const hls = new Hls(hlsConfig);
       this.hls = hls;
       this.engine = createHlsEngine(hls);
-      hls.loadSource(url);
+      const streamUrl = await this.resolveHlsStreamUrl(url);
+      hls.loadSource(streamUrl);
       hls.attachMedia(this.videoEl);
       // The audio/subtitle track lists aren't ready at MANIFEST_PARSED — hls.js
       // fills them and fires their *_TRACKS_UPDATED events separately, so apply
       // the saved picks there.
-      hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, this.callbacks.onAudioTracksUpdated);
+      hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, (_event, data) => {
+        // Auto-select English when the stream exposes multiple audio renditions.
+        const tracks = (data as { audioTracks?: Array<{ lang?: string; name?: string }> } | undefined)?.audioTracks;
+        const idx = (tracks ?? []).findIndex(t => String(t.lang || t.name || '').toLowerCase().startsWith('en'));
+        if (idx >= 0) { try { hls.audioTrack = idx; } catch { /* keep default */ } }
+        this.callbacks.onAudioTracksUpdated();
+      });
       hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, this.callbacks.onSubtitleTracksUpdated);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         log.info('hls.js manifest parsed; starting playback',
@@ -704,6 +712,16 @@ export class PlayerPipeline {
       this.videoEl.src = url;
       this.videoEl.play().catch(() => {});
     }
+  }
+
+  /** Pre-flight a tokenized/redirected HLS manifest and use the final URL. */
+  private async resolveHlsStreamUrl(url: string): Promise<string> {
+    if (!/\.m3u8$|\?token=|\/hlsr\//i.test(url)) return url;
+    try {
+      const m = await fetchHlsManifest(url);
+      if (m && m.finalUrl && m.finalUrl !== url) return m.finalUrl;
+    } catch { /* keep the original URL */ }
+    return url;
   }
 
   private loadWithShaka(
