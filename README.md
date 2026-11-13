@@ -1,15 +1,9 @@
 <div align="center">
   <img src="assets/icon.svg" alt="webOS IPTV Player icon">
-  <h1>webOS IPTV Player</h1>
+  <h1>webOS IPTV Player <sub>(estate fork)</sub></h1>
   <p>An IPTV player for LG webOS TVs. Supports M3U playlists, Xtream Codes accounts, XMLTV program guides, and catch-up/timeshift playback.</p>
-  <p><strong>More webOS tools:</strong> <a href="https://github.com/lennylxx/lg-devmode-forever">DevMode Forever</a> · <a href="https://github.com/lennylxx/lg-geolock-bypass">GeoLock Bypass</a> · <a href="https://github.com/lennylxx/lg-ipk-download">IPK Download</a></p>
+  <p>Fork of <a href="https://github.com/lennylxx/webos-iptv-player">lennylxx/webos-iptv-player</a>, integrated with the estate master provider (<code>:8081</code>) — one panel speaking Xtream + M3U + Stalker.</p>
   <p>English | <a href="README.zh-CN.md">简体中文</a></p>
-  <p>
-  <a href="#supported-webos-versions"><img src="https://img.shields.io/badge/webOS-4%2B-e6007e?logo=webos&logoColor=white" alt="webOS 4+"></a>
-  <a href="https://github.com/lennylxx/webos-iptv-player/releases/latest"><img src="https://img.shields.io/github/v/release/lennylxx/webos-iptv-player" alt="Latest release"></a>
-  <a href="https://github.com/lennylxx/webos-iptv-player/releases"><img src="https://img.shields.io/github/downloads/lennylxx/webos-iptv-player/total" alt="GitHub downloads"></a>
-  <a href="https://lennylxx.github.io/webos-iptv-player/"><img src="https://img.shields.io/badge/Website-222?logo=github" alt="Project website"></a>
-  </p>
 </div>
 
 ## Screenshots
