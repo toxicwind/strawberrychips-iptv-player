@@ -670,31 +670,14 @@ export const StorageService = {
     if (list === null) {
       // Fork default: curated accounts only (manifest-backed). The stock app
       // seeds nothing; the patched TV build seeded 7 junk accounts.
-      const seed: PlaylistEntry[] = [
+            const seed: PlaylistEntry[] = [
         {
-          id: 'xtream-1tv41', name: '1TV41', url: 'http://1tv41.icu:8080',
-          source: 'xtream', enabled: true,
-          xtream: {
-            username: 'VMh8na', password: '793530', liveOutput: 'auto',
-            streamBaseUrl: 'http://1xtr.icu:8080',
-            liveCategories: { mode: 'include', ids: ['1','68','40','88','37','2','67','92','3','4','5','17','193','188','169','12','22','232'] },
-          },
+          id: 'm3u-en', name: 'EN', url: 'http://10.0.0.218:18082/our.en.m3u',
+          source: 'url', enabled: true,
         },
         {
-          // 2026-11-10: replaced the 1-slot JP/KR line (195.128.27.253, max=1)
-          // — slot rule: NO 1-2 slot servers. s.rocketdns.info has 100 slots,
-          // 32 free at audit, US-focused catalog (USA + NFL/NBA/MLB/NHL/PPV).
-          id: 'xtream-us', name: 'US', url: 'http://s.rocketdns.info:8080',
-          source: 'xtream', enabled: true,
-          xtream: {
-            username: 'protonimumtv', password: 'protonimumtv', liveOutput: 'auto',
-            liveCategories: { mode: 'include', ids: ['165','125','123','122','130','134','135','136','137','124','127','126','159','160','162','161','129','225','364','386','385','255','128','154','176','180','370','177','379','4','249','153','156','171','233','230','400','181','384','399','224','231','367','232','234','138','392','393','242','235','243','356','394','395','396','397','388','398','2','131','227','306','315','339','380','381','377'] },
-          },
-        },
-        {
-          id: 'xtream-jp-kr', name: 'JP/KR', url: 'http://195.128.27.253:2095',
-          source: 'xtream', enabled: true,
-          xtream: { username: 'cabtxNjD', password: 'a7ztYjf', liveOutput: 'auto' },
+          id: 'm3u-jpkr', name: 'JP/KR', url: 'http://10.0.0.218:18082/our.m3u',
+          source: 'url', enabled: true,
         },
       ];
       set('playlists', seed);
