@@ -8,6 +8,9 @@ import type { XtreamCatchupSource } from '../types';
 export interface XtreamCredentials {
   /** Portal base, e.g. `http://host:8080`. Normalized lazily by each builder. */
   baseUrl: string;
+  /** Advertised stream host (server_info.url) when it differs from the portal
+   *  base. Stream URLs are built against this; API calls keep the portal base. */
+  streamBaseUrl?: string;
   username: string;
   password: string;
 }
@@ -32,6 +35,12 @@ export function normalizeXtreamBaseUrl(input: string): string {
   let s = input.trim();
   if (!/^https?:\/\//i.test(s)) s = 'http://' + s;
   return s.replace(/\/+$/, '');
+}
+
+/** Base used for stream URLs: the advertised stream host when one is set,
+ *  else the portal base. API endpoints always use the portal base. */
+export function xtreamStreamBase(c: XtreamCredentials): string {
+  return normalizeXtreamBaseUrl(c.streamBaseUrl && c.streamBaseUrl.trim() ? c.streamBaseUrl : c.baseUrl);
 }
 
 function creds({ username, password }: XtreamCredentials): string {
@@ -82,7 +91,7 @@ export function xtreamPlayerApi(
 
 /** Live stream URL built from a Player API stream id. */
 export function xtreamLiveUrl(c: XtreamCredentials, streamId: string, output: XtreamLiveOutput): string {
-  const base = normalizeXtreamBaseUrl(c.baseUrl);
+  const base = xtreamStreamBase(c);
   return `${base}/live/${encodeURIComponent(c.username)}/${encodeURIComponent(c.password)}/${encodeURIComponent(streamId)}.${output}`;
 }
 
@@ -128,13 +137,13 @@ export function xtreamCredentialsFromLiveUrl(
 /** VOD (movie) stream URL: `{base}/movie/{user}/{pass}/{streamId}.{ext}`.
  *  Played by the native pipeline; container_extension comes from the catalog. */
 export function xtreamVodUrl(c: XtreamCredentials, streamId: string, ext: string): string {
-  const base = normalizeXtreamBaseUrl(c.baseUrl);
+  const base = xtreamStreamBase(c);
   return `${base}/movie/${encodeURIComponent(c.username)}/${encodeURIComponent(c.password)}/${streamId}.${ext}`;
 }
 
 /** Series episode stream URL: `{base}/series/{user}/{pass}/{episodeId}.{ext}`. */
 export function xtreamEpisodeUrl(c: XtreamCredentials, episodeId: string, ext: string): string {
-  const base = normalizeXtreamBaseUrl(c.baseUrl);
+  const base = xtreamStreamBase(c);
   return `${base}/series/${encodeURIComponent(c.username)}/${encodeURIComponent(c.password)}/${episodeId}.${ext}`;
 }
 
@@ -145,7 +154,7 @@ export function xtreamCatchupSource(
   streamId: string,
   output: XtreamLiveOutput = 'ts',
 ): string {
-  const base = normalizeXtreamBaseUrl(c.baseUrl);
+  const base = xtreamStreamBase(c);
   const username = encodeURIComponent(c.username);
   const password = encodeURIComponent(c.password);
   const id = encodeURIComponent(streamId);
@@ -158,7 +167,7 @@ export function xtreamCatchupSources(
   streamId: string,
   preferred: XtreamLiveOutput = 'ts',
 ): XtreamCatchupSource[] {
-  const base = normalizeXtreamBaseUrl(c.baseUrl);
+  const base = xtreamStreamBase(c);
   const username = encodeURIComponent(c.username);
   const password = encodeURIComponent(c.password);
   const id = encodeURIComponent(streamId);

@@ -376,6 +376,12 @@ class PlaylistServiceImpl {
         const credentials = { baseUrl: pl.url, ...pl.xtream };
         xtreamCredentials = credentials;
         const client = createXtreamClient(credentials);
+        // Prefer the advertised stream host (server_info.url) over the portal
+        // base for stream URLs; discover it when the account doesn't store one.
+        if (!credentials.streamBaseUrl) {
+          const host = await client.getStreamHost();
+          if (host) credentials.streamBaseUrl = host;
+        }
         let allowedOutputFormats: string[] = [];
         if (pl.xtream.liveOutput === 'auto') {
           allowedOutputFormats =

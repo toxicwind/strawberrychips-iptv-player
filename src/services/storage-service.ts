@@ -676,6 +676,7 @@ export const StorageService = {
           source: 'xtream', enabled: true,
           xtream: {
             username: 'VMh8na', password: '793530', liveOutput: 'auto',
+            streamBaseUrl: 'http://1xtr.icu:8080',
             liveCategories: { mode: 'include', ids: ['1','68','40','88','37','2','67','92','3','4','5','17','193','188','169','12','22','232'] },
           },
         },

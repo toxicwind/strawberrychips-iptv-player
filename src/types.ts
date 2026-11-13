@@ -200,6 +200,8 @@ export interface PlaylistEntry {
     username: string;
     password: string;
     liveOutput?: import('./utils/xtream-url').XtreamLiveOutputPreference;
+    /** Advertised stream host (server_info.url) when it differs from the portal base. */
+    streamBaseUrl?: string;
     liveCategories?: XtreamLiveCategoryFilter;
   };
   /** Channel count, populated for 'upload' entries by reconcile() from UploadMeta. */

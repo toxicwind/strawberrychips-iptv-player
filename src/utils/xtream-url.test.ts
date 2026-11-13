@@ -275,3 +275,17 @@ describe('Xtream catch-up URLs', () => {
     )).toBe('2026-07-21:21-30');
   });
 });
+
+describe('advertised stream host', () => {
+  const portal = { baseUrl: 'http://portal:8080', username: 'u', password: 'p' };
+  const withHost = { ...portal, streamBaseUrl: 'http://stream:8080' };
+  it('builds stream URLs against the advertised host when set', () => {
+    expect(xtreamLiveUrl(withHost, '7', 'ts')).toBe('http://stream:8080/live/u/p/7.ts');
+    expect(xtreamVodUrl(withHost, '7', 'mp4')).toBe('http://stream:8080/movie/u/p/7.mp4');
+    expect(xtreamEpisodeUrl(withHost, '7', 'mp4')).toBe('http://stream:8080/series/u/p/7.mp4');
+    expect(xtreamCatchupSource(withHost, '7')).toBe('http://stream:8080/timeshift/u/p/{duration}/{start}/7.ts');
+  });
+  it('falls back to the portal base when no stream host is set', () => {
+    expect(xtreamLiveUrl(portal, '7', 'ts')).toBe('http://portal:8080/live/u/p/7.ts');
+  });
+});

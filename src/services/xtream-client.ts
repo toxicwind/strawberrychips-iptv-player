@@ -1,5 +1,5 @@
 import { FetchTextError, fetchLimitedText } from '../utils/fetch-helper';
-import { xtreamPlayerApi, type XtreamCredentials } from '../utils/xtream-url';
+import { normalizeXtreamBaseUrl, xtreamPlayerApi, type XtreamCredentials } from '../utils/xtream-url';
 import { createLogger } from '../utils/logger';
 import type { VodCategory, VodItem, VodInfo, SeriesCategory, SeriesItem, SeriesInfo, Episode, SidecarSubtitle } from '../types';
 import { CONFIG } from '../config';
@@ -385,6 +385,28 @@ export function createXtreamClient(creds: XtreamCredentials, accountId = '') {
         timeZone: toStr(record.timezone),
         offsetMinutes: parseServerOffset(record),
       };
+    },
+
+    /** Advertised stream host (`server_info.url`), or null when it matches the
+     *  portal base or the panel does not advertise one. Used to build stream
+     *  URLs against the host that actually serves them. */
+    async getStreamHost(signal?: AbortSignal): Promise<string | null> {
+      const data = await fetchJson(
+        xtreamPlayerApi(creds),
+        ACCOUNT_INFO_TIMEOUT,
+        CONFIG.XTREAM.ACCOUNT_MAX_BYTES,
+        signal,
+      );
+      if (!data || typeof data !== 'object') return null;
+      const server = (data as { server_info?: unknown }).server_info;
+      if (!server || typeof server !== 'object') return null;
+      const record = server as Record<string, unknown>;
+      let host = toStr(record.url).trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+      if (!host) return null;
+      const port = toNumber(record.port);
+      if (port > 0 && !/:(\d+)$/.test(host)) host += ':' + String(port);
+      const base = normalizeXtreamBaseUrl(host);
+      return base === normalizeXtreamBaseUrl(creds.baseUrl) ? null : base;
     },
 
     async getArchiveListings(
